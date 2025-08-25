@@ -79,22 +79,26 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Connect socket
-  const connectSocket = (userData) => {
-    if (!userData || socket?.connected) return;
+  // In your AuthContext.jsx file
 
-    const newSocket = io(backendUrl, {
-      query: {
-        userId: userData._id,
-      },
-    });
+const connectSocket = (userData) => {
+  if (!userData || socket?.connected) return;
 
-    newSocket.connect();
-    setSocket(newSocket);
+  const newSocket = io(backendUrl, {
+    query: {
+      userId: userData._id,
+    },
+  });
 
-    newSocket.on("getOnlineUser", (userIds) => {
-      setOnlineUser(userIds);
-    });
-  };
+  // newSocket.connect(); // This line can be removed
+
+  setSocket(newSocket);
+
+  // Corrected event name to match the server
+  newSocket.on("getOnlineUsers", (userIds) => {
+    setOnlineUser(userIds);
+  });
+};
 
   useEffect(() => {
     if (token) {
