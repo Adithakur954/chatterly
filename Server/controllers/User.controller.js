@@ -5,7 +5,7 @@ import generateToken from "../utils/generateToken.js";
 import cloudinary from "../utils/cloudinary.js";
 import bcrypt from "bcryptjs";
 
-// 🔹 Signup Controller
+// Signup Controller
 export const signup = asyncHandler(async (req, res) => {
   const { email, name, password, profilePic, bio } = req.body;
 
@@ -25,13 +25,11 @@ export const signup = asyncHandler(async (req, res) => {
     name,
     password: hashedPass,
     bio,
-    profilePic: profilePic || null, // optional if provided
+    profilePic: profilePic || null,
   });
 
-  // 🔹 Generate JWT with { id: user._id }
   const token = generateToken(newUser._id);
 
-  // remove password from response
   const userResponse = newUser.toObject();
   delete userResponse.password;
 
@@ -42,7 +40,7 @@ export const signup = asyncHandler(async (req, res) => {
   });
 });
 
-// 🔹 Login Controller
+// Login Controller
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
@@ -72,7 +70,7 @@ export const login = asyncHandler(async (req, res) => {
   });
 });
 
-// 🔹 Check Auth
+// Check Auth
 export const checkauth = asyncHandler(async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ message: "Unauthorized" });
@@ -84,14 +82,13 @@ export const checkauth = asyncHandler(async (req, res) => {
   });
 });
 
-// 🔹 Update Profile
+// Update Profile
 export const updateProfile = asyncHandler(async (req, res) => {
   const { name, bio, profilePic } = req.body;
   const userId = req.user._id;
 
-  let updatedUser;
-
   try {
+    let updatedUser;
     if (profilePic) {
       const upload = await cloudinary.uploader.upload(profilePic, {
         folder: "profile_pics",

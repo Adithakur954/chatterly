@@ -1,45 +1,51 @@
 import React, { createContext, useEffect, useState } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom"; // ✅ import this
+import { useNavigate } from "react-router-dom";
+import toast from 'react-hot-toast';
 
 export const AuthContext = createContext();
+
+// Create an axios instance
+const api = axios.create({
+  baseURL: "/api"
+});
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem("token"));
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate(); // ✅ hook
+  const [authLoading, setAuthLoading] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (token) {
-      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
       checkAuth();
     } else {
-      delete axios.defaults.headers.common["Authorization"];
+      delete api.defaults.headers.common["Authorization"];
       setLoading(false);
     }
   }, [token]);
 
-  // 🔹 Login & Signup
   const login = async (endpoint, body) => {
+    setAuthLoading(true);
     try {
-      const { data } = await axios.post(`/api/user/${endpoint}`, body);
-
+      const { data } = await api.post(`/user/${endpoint}`, body);
       localStorage.setItem("token", data.token);
       setToken(data.token);
       setUser(data.user);
-
-      // ✅ redirect after login/signup
+      toast.success(data.message);
       navigate("/");
     } catch (error) {
-      console.error("Login/Signup failed:", error);
-      alert(error.response?.data?.message || "An error occurred.");
+      toast.error(error.response?.data?.message || "An error occurred.");
+    } finally {
+      setAuthLoading(false);
     }
   };
 
   const checkAuth = async () => {
     try {
-      const { data } = await axios.get("/api/user/check");
+      const { data } = await api.get("/user/check");
       setUser(data.user);
     } catch (error) {
       console.error("Auth check failed:", error.response?.data || error.message);
@@ -55,22 +61,25 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("token");
     setToken(null);
     setUser(null);
-    navigate("/login"); // ✅ redirect to login page
+    toast.success("Logged out successfully");
+    navigate("/login");
   };
 
   const updateProfile = async (body) => {
+    setAuthLoading(true);
     try {
-      const { data } = await axios.put("/api/user/profile", body);
+      const { data } = await api.put("/user/profile", body);
       setUser(data.user);
-      alert("Profile updated successfully!");
     } catch (error) {
-      console.error("Profile update failed:", error);
-      alert(error.response?.data?.message || "Failed to update profile.");
+      toast.error(error.response?.data?.message || "Failed to update profile.");
+      throw error;
+    } finally {
+      setAuthLoading(false);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, updateProfile, loading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, updateProfile, loading, authLoading, AuthUser: user }}>
       {!loading && children}
     </AuthContext.Provider>
   );
