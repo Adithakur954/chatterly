@@ -1,14 +1,9 @@
 import React, { createContext, useEffect, useState } from "react";
-import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import toast from 'react-hot-toast';
+import apiClient , {setAuthToken} from "../src/api/axios"; // 👈 Import the shared client and setter
 
 export const AuthContext = createContext();
-
-// Create an axios instance
-const api = axios.create({
-  baseURL: "/api"
-});
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -18,11 +13,14 @@ export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // When the token changes, update it in the API client and local storage
     if (token) {
-      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      localStorage.setItem("token", token);
+      setAuthToken(token); // 👈 Set token on the shared instance
       checkAuth();
     } else {
-      delete api.defaults.headers.common["Authorization"];
+      localStorage.removeItem("token");
+      setAuthToken(null); // 👈 Clear token on the shared instance
       setLoading(false);
     }
   }, [token]);
@@ -30,9 +28,8 @@ export const AuthProvider = ({ children }) => {
   const login = async (endpoint, body) => {
     setAuthLoading(true);
     try {
-      const { data } = await api.post(`/user/${endpoint}`, body);
-      localStorage.setItem("token", data.token);
-      setToken(data.token);
+      const { data } = await apiClient.post(`/user/${endpoint}`, body); // 👈 Use shared client
+      setToken(data.token); // This will trigger the useEffect above
       setUser(data.user);
       toast.success(data.message);
       navigate("/");
@@ -45,11 +42,10 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     try {
-      const { data } = await api.get("/user/check");
+      const { data } = await apiClient.get("/user/check"); // 👈 Use shared client
       setUser(data.user);
     } catch (error) {
       console.error("Auth check failed:", error.response?.data || error.message);
-      localStorage.removeItem("token");
       setToken(null);
       setUser(null);
     } finally {
@@ -58,7 +54,6 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem("token");
     setToken(null);
     setUser(null);
     toast.success("Logged out successfully");
@@ -68,7 +63,7 @@ export const AuthProvider = ({ children }) => {
   const updateProfile = async (body) => {
     setAuthLoading(true);
     try {
-      const { data } = await api.put("/user/profile", body);
+      const { data } = await apiClient.put("/user/profile", body); // 👈 Use shared client
       setUser(data.user);
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to update profile.");

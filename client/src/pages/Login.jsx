@@ -1,6 +1,7 @@
 import React, { useContext, useState } from 'react';
 import assets from '../assets/assets';
 import { AuthContext } from '../../Context/AuthContext';
+import { ChatContext } from '../../Context/ChatContext'; // 👈 1. Import ChatContext
 import toast from 'react-hot-toast';
 
 function Login() {
@@ -14,6 +15,7 @@ function Login() {
   });
   const [isDataSubmitted, setIsDataSubmitted] = useState(false);
   const { login, loading } = useContext(AuthContext);
+  const { getUsers } = useContext(ChatContext); // 👈 2. Get the getUsers function
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -32,12 +34,16 @@ function Login() {
     }
 
     if (currentState === 'signUp') {
+      // Use the 'login' function for both login and signup as defined in AuthContext
       await login('signup', { email: formData.email, name: formData.fullName, password: formData.password, bio: formData.bio });
+      // ✅ 3. After a successful signup, immediately fetch the updated user list
+      await getUsers(); 
     } else {
       await login('login', { email: formData.email, password: formData.password });
     }
   };
 
+  // ... keep the rest of your JSX form code the same
   return (
     <div className='min-h-screen flex items-center justify-center gap-8 sm:justify-evenly max-sm:flex-col'>
       <div className='flex items-center flex-col'>

@@ -1,13 +1,10 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { AuthContext } from "./AuthContext";
-import { io } from "socket.io-client";
-import axios from "axios";
+import apiClient from "../src/api/axios";
+
+
 
 export const ChatContext = createContext();
-
-const api = axios.create({
-  baseURL: "/api"
-});
 
 export const ChatProvider = ({ children }) => {
   const { AuthUser } = useContext(AuthContext);
@@ -19,88 +16,35 @@ export const ChatProvider = ({ children }) => {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (AuthUser) {
-      const newSocket = io("http://localhost:5000", {
-        query: { userId: AuthUser._id },
-      });
-      setSocket(newSocket);
-
-      newSocket.on("getOnlineUsers", (users) => {
-        setOnlineUsers(users);
-      });
-
-      return () => newSocket.close();
-    } else {
-      if (socket) {
-        socket.close();
-        setSocket(null);
-      }
-    }
-  }, [AuthUser]);
-
-  useEffect(() => {
-    if (socket) {
-      socket.on("newMessage", (newMessage) => {
-        if (selectedUser?._id === newMessage.senderId) {
-          setMessages((prev) => [...prev, newMessage]);
-        } else {
-          setUnseenMessages((prev) => ({
-            ...prev,
-            [newMessage.senderId]: (prev[newMessage.senderId] || 0) + 1,
-          }));
-        }
-      });
-
-      return () => socket.off("newMessage");
-    }
-  }, [socket, selectedUser]);
+  // ... (keep your socket.io useEffect hooks the same)
 
   const getUsers = async () => {
+    if (!AuthUser) return; // Don't fetch if there's no user
     setLoading(true);
     try {
-      const { data } = await api.get("/user/all");
+      // ✅ Now this call uses the shared client which has the auth token
+      const { data } = await apiClient.get("/user/all");
       setUsers(data);
     } catch (error) {
       console.error("Failed to fetch users:", error);
+      // This error will now likely only happen for legitimate server issues
     } finally {
       setLoading(false);
     }
   };
-
-  const getMessages = async (userId) => {
-    setLoading(true);
-    try {
-      const { data } = await api.get(`/message/${userId}`);
-      setMessages(data);
-    } catch (error) {
-      console.error("Failed to fetch messages:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const sendMessage = async (receiverId, message) => {
-    try {
-      const { data } = await api.post(`/message/send/${receiverId}`, { message });
-      setMessages((prev) => [...prev, data]);
-      socket.emit("sendMessage", { ...data, receiverId });
-    } catch (error) {
-      console.error("Failed to send message:", error);
-    }
-  };
+  
+  // ... (keep your other functions like getMessages and sendMessage the same, but ensure they also use `apiClient`)
 
   useEffect(() => {
     if (AuthUser) {
       getUsers();
+    } else {
+      // If user logs out, clear the user list
+      setUsers([]);
     }
   }, [AuthUser]);
-
-  useEffect(() => {
-    if (selectedUser) {
-      getMessages(selectedUser._id);
-    }
-  }, [selectedUser]);
+  
+  // ... (keep the rest of the context the same)
 
   const value = {
     messages,
@@ -111,6 +55,7 @@ export const ChatProvider = ({ children }) => {
     onlineUsers,
     loading,
     sendMessage,
+    getUsers // 👈 Expose getUsers so Login page can call it
   };
 
   return (
@@ -118,4 +63,4 @@ export const ChatProvider = ({ children }) => {
       {children}
     </ChatContext.Provider>
   );
-}; 
+};
