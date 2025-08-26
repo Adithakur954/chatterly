@@ -1,11 +1,24 @@
-import React, { useContext } from 'react'
+import React, { useContext, useState, useEffect } from 'react'; // 👈 Import useState & useEffect
 import { useNavigate } from 'react-router-dom';
-import assets, { userDummyData } from '../assets/assets';
+import assets from '../assets/assets';
 import { AuthContext } from '../../Context/AuthContext';
+import { ChatContext } from '../../Context/ChatContext';
 
-const Sidebar = ({ selectedUser, setSelectedUser }) => {
+const Sidebar = () => {
   const navigate = useNavigate();
-  const { logout } = useContext(AuthContext);
+  const { AuthUser, logout } = useContext(AuthContext);
+
+  // ✅ Get users and onlineUsers from ChatContext
+  const { users, onlineUsers, selectedUser, setSelectedUser, unseenMessages } = useContext(ChatContext);
+
+  const [input, setInput] = useState(''); // ✅ Initialize with an empty string for searching
+
+  // Filter out the current authenticated user from the list
+  const otherUsers = users.filter(user => user._id !== AuthUser._id);
+
+  const filteredUsers = input
+    ? otherUsers.filter(user => user.name.toLowerCase().includes(input.toLowerCase())) // ✅ Use 'name' to match schema
+    : otherUsers;
 
   return (
     <div className={`bg-[#8185B2]/10 h-full p-5 rounded-r-xl overflow-y-scroll text-white ${selectedUser ? "max-md:hidden" : ''}`}>
@@ -24,27 +37,50 @@ const Sidebar = ({ selectedUser, setSelectedUser }) => {
 
         <div className='bg-[#282142] rounded-full flex items-center gap-2 mt-5 px-4 py-3'>
           <img src={assets.search_icon} alt="search" className=' w-3 cursor-pointer' />
-          <input type="text" className='bg-transparent border-none border-gray-600 outline-none text-sm placeholder:text-gray-500 pl-2' placeholder='Search...' />
+          <input 
+            onChange={(e) => setInput(e.target.value)} 
+            value={input}
+            type="text" 
+            className='bg-transparent border-none border-gray-600 outline-none text-sm placeholder:text-gray-500 pl-2' 
+            placeholder='Search...' 
+          />
         </div>
       </div>
       <div className='flex flex-col'>
-        {userDummyData.map((user, index) => (
-          <div key={index} className={`relative flex items-center gap-2 p-2 rounded-md hover:bg-[#282142] ${selectedUser?._id === user._id ? 'bg-[#282142]' : ''}`} onClick={() => setSelectedUser(user)}>
-            <img src={user?.profilePic || assets.avatar_icon} alt={user.name} className='w-10 h-10 rounded-full' />
-            <div className='flex flex-col'>
-              <p>{user.fullName}</p>
-              {
-                index > 2
-                  ? <span className='font-semibold text-green-500 '>Online</span> :
-                  <span className='text-sm text-gray-400'>Offline</span>
-              }
+        {filteredUsers.map((user) => {
+          const isOnline = onlineUsers.includes(user._id);
+          const unreadCount = unseenMessages[user._id] || 0;
+
+          return (
+            <div
+              key={user._id} // ✅ Use user._id for the key
+              className={`relative flex items-center gap-2 p-2 rounded-md hover:bg-[#282142] cursor-pointer ${selectedUser?._id === user._id ? 'bg-[#282142]' : ''}`}
+              onClick={() => setSelectedUser(user)}
+            >
+              <div className="relative">
+                <img src={user?.profilePic || assets.avatar_icon} alt={user.name} className='w-10 h-10 rounded-full object-cover' />
+                {isOnline && <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-gray-800 rounded-full"></span>}
+              </div>
+
+              <div className='flex flex-col'>
+                <p>{user.name}</p> {/* ✅ Use 'name' to match schema */}
+                <span className={`text-sm ${isOnline ? 'text-green-500' : 'text-gray-400'}`}>
+                  {isOnline ? 'Online' : 'Offline'}
+                </span>
+              </div>
+              
+              {/* ✅ Correctly display the unread message count */}
+              {unreadCount > 0 && (
+                <span className='absolute top-4 right-2 text-xs bg-red-500 text-white rounded-full h-4 w-4 flex items-center justify-center'>
+                  {unreadCount}
+                </span>
+              )}
             </div>
-            {index > 2 && <span className='absolute top-4 right-2 text-xs h-4 w-4 text-green-400'>{index}</span>}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
-  )
-}
+  );
+};
 
 export default Sidebar;
