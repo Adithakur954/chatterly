@@ -115,20 +115,3 @@ export const updateProfile = asyncHandler(async (req, res) => {
     res.status(500).json({ message: "Failed to update profile" });
   }
 });
-
-// (Keep all your existing code: signup, login, checkauth, updateProfile)
-
-// ✅ Add this new function to get all users for the sidebar
-export const getUsersForSidebar = asyncHandler(async (req, res) => {
-  try {
-    const loggedInUserId = req.user._id;
-
-    // Find all users from the database, but exclude the current user's own ID from the list
-    const allOtherUsers = await User.find({ _id: { $ne: loggedInUserId } }).select("-password");
-
-    res.status(200).json(allOtherUsers);
-  } catch (error) {
-    console.error("Error in getUsersForSidebar: ", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-});

@@ -1,153 +1,140 @@
-import React, { useContext, useState } from 'react';
-import assets from '../assets/assets';
-import { AuthContext } from '../../Context/AuthContext';
-import { ChatContext } from '../../Context/ChatContext'; // 👈 1. Import ChatContext
-import toast from 'react-hot-toast';
+// src/pages/Login.jsx
+import React, { useContext, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import assets from "../assets/assets";
+import { AuthContext } from "../../Context/AuthContext";
+import toast from "react-hot-toast";
 
-function Login() {
-  const [currentState, setCurrentState] = useState("signUp");
-  const [formData, setFormData] = useState({
+const Login = () => {
+  const { login, authLoading } = useContext(AuthContext);
+  const navigate = useNavigate();
+
+  const [mode, setMode] = useState("login"); // 'login' | 'signup'
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState({
     fullName: "",
     email: "",
     password: "",
     confirmPassword: "",
-    bio: ""
+    bio: "",
   });
-  const [isDataSubmitted, setIsDataSubmitted] = useState(false);
-  const { login, loading } = useContext(AuthContext);
-  const { getUsers } = useContext(ChatContext); // 👈 2. Get the getUsers function
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
+  const onChange = (e) => setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
 
-  const SubmitHandler = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (loading) return;
+    if (authLoading) return;
 
-    if (currentState === "signUp" && !isDataSubmitted) {
-      if (formData.password !== formData.confirmPassword) {
-        return toast.error("Passwords do not match");
-      }
-      setIsDataSubmitted(true);
+    if (!acceptedTerms) {
+      toast.error("Please accept terms");
       return;
     }
 
-    if (currentState === 'signUp') {
-      // Use the 'login' function for both login and signup as defined in AuthContext
-      await login('signup', { email: formData.email, name: formData.fullName, password: formData.password, bio: formData.bio });
-      // ✅ 3. After a successful signup, immediately fetch the updated user list
-      await getUsers(); 
-    } else {
-      await login('login', { email: formData.email, password: formData.password });
+    // Basic validation for signup step 1
+    if (mode === "signup" && step === 1) {
+      if (!form.fullName || !form.email || !form.password) {
+        toast.error("Fill required fields");
+        return;
+      }
+      if (form.password !== form.confirmPassword) {
+        toast.error("Passwords do not match");
+        return;
+      }
+      setStep(2);
+      return;
+    }
+
+    try {
+      let res;
+      if (mode === "signup") {
+        res = await login("signup", {
+          name: form.fullName,
+          email: form.email,
+          password: form.password,
+          bio: form.bio,
+        });
+      } else {
+        res = await login("login", { email: form.email, password: form.password });
+      }
+
+      console.log("login() returned:", res);
+      console.log("localStorage token:", localStorage.getItem("token"));
+
+      // check shape returned by AuthContext.login
+      if (res?.success) {
+        // navigation now
+        navigate("/"); // <- should take user to Home
+        return;
+      }
+
+      // If not success, display detailed error if available
+      const message =
+        res?.error?.response?.data?.message ||
+        res?.error?.message ||
+        "Login / Signup failed";
+      toast.error(message);
+    } catch (err) {
+      console.error("Unexpected error in handleSubmit:", err);
+      toast.error("An unexpected error occurred");
     }
   };
 
-  // ... keep the rest of your JSX form code the same
   return (
-    <div className='min-h-screen flex items-center justify-center gap-8 sm:justify-evenly max-sm:flex-col'>
-      <div className='flex items-center flex-col'>
-        <img src={assets.logo_icon} alt="Chatterly Logo" className='w-[min(30vw,250px)]' />
-        <p className='text-white text-4xl'>Chatterly</p>
+    <div className="min-h-screen flex items-center justify-center gap-8 sm:justify-evenly bg-[#0b0a16] text-white p-6">
+      <div className="flex items-center flex-col text-center">
+        <img src={assets.logo_icon} alt="logo" className="w-[min(30vw,250px)]" />
+        <p className="text-4xl mt-4 font-semibold">Chatterly</p>
       </div>
 
-      <form onSubmit={SubmitHandler} className='border-2 bg-white/10 text-white border-gray-500 p-6 flex flex-col gap-6 rounded-lg shadow-lg w-[min(90vw,400px)]'>
-        <h2 className='font-medium text-2xl flex justify-between items-center'>
-          {currentState === "signUp" ? (isDataSubmitted ? "About You" : "Sign Up") : "Login"}
-          {isDataSubmitted && (
-            <img
-              onClick={() => setIsDataSubmitted(false)}
-              src={assets.arrow_icon}
-              className='w-5 cursor-pointer transform rotate-180'
-              alt="Back"
-            />
-          )}
+      <form onSubmit={handleSubmit} className="w-[min(90vw,420px)] bg-white/5 border border-gray-600 p-6 rounded-xl flex flex-col gap-6">
+        <h2 className="text-2xl font-medium">
+          {mode === "signup" ? (step === 1 ? "Sign Up" : "Tell us about you") : "Login"}
         </h2>
 
-        {!isDataSubmitted && (
+        {/* inputs */}
+        {(mode === "login" || (mode === "signup" && step === 1)) && (
           <>
-            {currentState === "signUp" && (
-              <input
-                onChange={handleChange}
-                name="fullName"
-                value={formData.fullName}
-                type="text"
-                placeholder='Full Name'
-                required
-                className='p-3 bg-transparent border border-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500'
-              />
+            {mode === "signup" && step === 1 && (
+              <input name="fullName" value={form.fullName} onChange={onChange} placeholder="Full Name" className="p-3 bg-transparent border border-gray-400 rounded-lg" required />
             )}
-            <input
-              onChange={handleChange}
-              name="email"
-              value={formData.email}
-              type="email"
-              placeholder='Enter your Email'
-              required
-              className='p-3 bg-transparent border border-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500'
-            />
-            <input
-              onChange={handleChange}
-              name="password"
-              value={formData.password}
-              type="password"
-              placeholder='Enter your Password'
-              required
-              className='p-3 bg-transparent border border-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500'
-            />
-            {currentState === "signUp" && (
-              <input
-                onChange={handleChange}
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                type="password"
-                placeholder='Confirm your Password'
-                required
-                className='p-3 bg-transparent border border-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500'
-              />
+            <input name="email" value={form.email} onChange={onChange} type="email" placeholder="Email" className="p-3 bg-transparent border border-gray-400 rounded-lg" required />
+            <input name="password" value={form.password} onChange={onChange} type="password" placeholder="Password" className="p-3 bg-transparent border border-gray-400 rounded-lg" required />
+            {mode === "signup" && step === 1 && (
+              <input name="confirmPassword" value={form.confirmPassword} onChange={onChange} type="password" placeholder="Confirm Password" className="p-3 bg-transparent border border-gray-400 rounded-lg" required />
             )}
           </>
         )}
 
-        {currentState === "signUp" && isDataSubmitted && (
-          <textarea
-            onChange={handleChange}
-            name="bio"
-            value={formData.bio}
-            placeholder='Tell us about yourself'
-            className='p-3 bg-transparent border border-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-24'
-          />
+        {mode === "signup" && step === 2 && (
+          <textarea name="bio" value={form.bio} onChange={onChange} placeholder="Short bio (optional)" className="p-3 bg-transparent border border-gray-400 rounded-lg h-28" />
         )}
 
-        <button type='submit' disabled={loading} className='py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg cursor-pointer hover:from-blue-600 hover:to-purple-600 transition-all duration-300 disabled:opacity-50'>
-          {loading ? "Loading..." : (currentState === 'Login' ? 'Login' : isDataSubmitted ? 'Create Account' : 'Continue')}
-        </button>
-
-        <div className='text-sm text-gray-300 flex items-center gap-2'>
-          <input type="checkbox" id="terms" required />
+        <div className="flex items-center gap-2 text-sm text-gray-200">
+          <input id="terms" type="checkbox" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} />
           <label htmlFor="terms">I agree to the terms and conditions</label>
         </div>
 
-        <div className='flex flex-col gap-2 text-gray-200 text-center'>
-          {currentState === "signUp" ? (
+        <button type="submit" disabled={authLoading} className="py-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg text-white font-medium disabled:opacity-60">
+          {authLoading ? "Please wait..." : mode === "login" ? "Login" : step === 1 ? "Continue" : "Create Account"}
+        </button>
+
+        <div className="text-center text-sm text-gray-300">
+          {mode === "signup" ? (
             <p>
-              Already have an account?{' '}
-              <span className='text-blue-400 cursor-pointer hover:underline' onClick={() => { setCurrentState("Login"); setIsDataSubmitted(false); }}>
-                Login
-              </span>
+              Already have an account?{" "}
+              <button type="button" onClick={() => { setMode("login"); setStep(1); }} className="text-blue-400">Login</button>
             </p>
           ) : (
             <p>
-              Don't have an account?{' '}
-              <span className='text-blue-400 cursor-pointer hover:underline' onClick={() => setCurrentState("signUp")}>
-                Sign Up
-              </span>
+              Don't have an account?{" "}
+              <button type="button" onClick={() => { setMode("signup"); setStep(1); }} className="text-blue-400">Sign Up</button>
             </p>
           )}
         </div>
       </form>
     </div>
   );
-}
+};
 
 export default Login;

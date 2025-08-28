@@ -1,17 +1,20 @@
-import axios from 'axios';
+// src/api/axios.js
+import axios from "axios";
 
-// Create a single, configured axios instance
-const apiClient = axios.create({
-  baseURL: '/api',
+const BASE = import.meta.env.VITE_API_BASE || "/api";
+
+const api = axios.create({
+  baseURL: BASE,
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
-// Function to set the authentication token on the shared instance
-export const setAuthToken = (token) => {
-  if (token) {
-    apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-  } else {
-    delete apiClient.defaults.headers.common['Authorization'];
-  }
-};
+// Add request interceptor to include token automatically
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) config.headers["Authorization"] = `Bearer ${token}`;
+  return config;
+});
 
-export default apiClient;
+export default api;

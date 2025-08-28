@@ -1,57 +1,72 @@
-import express from "express";
-import "dotenv/config";
-import cors from "cors";
-import http from "http";
-import { connectDB } from "./lib/db.js";
-import userRouter from "./routes/userRoute.js";
-import messageRouter from "./routes/messageRoute.js";
-import { Server } from "socket.io";
+import express from 'express';
+import dotenv from 'dotenv';
+import cors from 'cors';
+import http from 'http';
+import { Server } from 'socket.io';
+import connectDB from './lib/db.js';
+import userRoute from './routes/userRoute.js';
+import messageRoute from './routes/messageRoute.js';
+
+dotenv.config();
 
 const app = express();
+const PORT = process.env.PORT || 5000;
+
 const server = http.createServer(app);
-
-// Socket.IO setup
-export const io = new Server(server, {
-  cors: { origin: "*" },
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST'],
+  },
 });
 
-export const userSocketMap = {}; // { userId: socketId }
+const userSocketMap = {}; // {userId: socketId}
 
-io.on("connection", (socket) => {
+io.on('connection', (socket) => {
+  console.log('A user connected:', socket.id);
+
   const userId = socket.handshake.query.userId;
-  console.log("user connected", userId);
+  if (userId) {
+    userSocketMap[userId] = socket.id;
+  }
 
-  if (userId) userSocketMap[userId] = socket.id;
+  io.emit('getOnlineUsers', Object.keys(userSocketMap));
 
-  io.emit("getOnlineUsers", Object.keys(userSocketMap));
+  socket.on('typing', ({ recipientId }) => {
+    const recipientSocketId = userSocketMap[recipientId];
+    if (recipientSocketId) {
+      io.to(recipientSocketId).emit('typing', { from: userId });
+    }
+  });
 
-  socket.on("disconnect", () => {
-    console.log("user disconnected");
-    if (userId) delete userSocketMap[userId];
-    io.emit("getOnlineUsers", Object.keys(userSocketMap));
+  socket.on('stopTyping', ({ recipientId }) => {
+    const recipientSocketId = userSocketMap[recipientId];
+    if (recipientSocketId) {
+      io.to(recipientSocketId).emit('stopTyping', { from: userId });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+    for (let userId in userSocketMap) {
+      if (userSocketMap[userId] === socket.id) {
+        delete userSocketMap[userId];
+        break;
+      }
+    }
+    io.emit('getOnlineUsers', Object.keys(userSocketMap));
   });
 });
 
-// Middleware
 app.use(cors());
-app.use(express.json({ limit: "4mb" }));
+app.use(express.json());
 
-// Routes
-app.get("/api/status", (req, res) => {
-  res.send("Server is running");
+app.use('/api/user', userRoute);
+app.use('/api/message', messageRoute);
+
+server.listen(PORT, () => {
+  connectDB();
+  console.log(`Server is running on port ${PORT}`);
 });
 
-app.use("/api/user", userRouter);
-app.use("/api/message", messageRouter);
-
-// Connect to DB
-try {
-  await connectDB();
-  const PORT = process.env.PORT || 5000;
-  server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-  });
-} catch (error) {
-  console.error("Failed to connect to the database", error);
-  process.exit(1);
-}
+export { io, userSocketMap };

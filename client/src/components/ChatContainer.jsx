@@ -1,109 +1,183 @@
-import React, { useContext, useEffect, useRef, useState } from 'react';
-import assets from '../assets/assets';
-import { formatDate } from '../lib/util';
-import { AuthContext } from '../../Context/AuthContext';
-import { ChatContext } from '../../Context/ChatContext';
+// src/components/ChatContainer.jsx
+import React, { useContext, useEffect, useRef, useState } from "react";
+import assets from "../assets/assets";
+import { formatDate } from "../lib/util";
+import { ChatContext } from "../../Context/ChatContext";
+import { AuthContext } from "../../Context/AuthContext";
+import toast from "react-hot-toast";
 
 function ChatContainer() {
-  const { AuthUser } = useContext(AuthContext);
-  const { selectedUser, setSelectedUser, messages, sendMessage } = useContext(ChatContext);
-  const [messageText, setMessageText] = useState('');
   const scrollEnd = useRef(null);
+  const { messages, selectedUser, getMessages, sendMessage, sendTyping, typingUsers } =
+    useContext(ChatContext);
+  const { authUser, onlineUsers, connectionStatus } = useContext(AuthContext);
+
+  const [input, setInput] = useState("");
+  const typingTimeout = useRef(null);
+  const [isTypingLocal, setIsTypingLocal] = useState(false);
 
   useEffect(() => {
-    scrollEnd.current?.scrollIntoView({ behavior: 'smooth' });
+    if (selectedUser?._id) getMessages(selectedUser._id);
+  }, [selectedUser]);
+
+  useEffect(() => {
+    // scroll on message changes
+    scrollEnd.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    if (messageText.trim() === '' || !selectedUser) return;
-    sendMessage(selectedUser._id, messageText);
-    setMessageText('');
+  const handleSendMessage = async (e) => {
+    e?.preventDefault();
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    await sendMessage({ text: trimmed });
+    setInput("");
+    setIsTypingLocal(false);
+    sendTyping(selectedUser._id, false);
   };
 
-  if (!selectedUser) {
-    return (
-      <div className='flex flex-col items-center justify-center h-full text-gray-500 bg-white/10 max-md:hidden'>
-        <img src={assets.logo_icon} className='max-w-16' alt="" />
-        <p className='text-lg font-medium text-white'>
-          Select a user to start chatting
-        </p>
-      </div>
-    );
-  }
+  // handle typing debounce
+  const handleTyping = (value) => {
+    setInput(value);
+    if (!selectedUser?._id) return;
 
-  return (
-    <div className="h-full flex flex-col bg-white/5 backdrop-blur-lg">
-      {/* Header */}
-      <div className='flex items-center gap-3 py-3 px-4 border-b border-stone-500'>
-        <img src={selectedUser.profilePic || assets.avatar_icon} alt="" className="w-8 h-8 rounded-full object-cover" />
-        <p className='flex-1 text-lg text-white'>{selectedUser.name}</p>
+    if (!isTypingLocal) {
+      setIsTypingLocal(true);
+      sendTyping(selectedUser._id, true);
+    }
+
+    clearTimeout(typingTimeout.current);
+    typingTimeout.current = setTimeout(() => {
+      setIsTypingLocal(false);
+      sendTyping(selectedUser._id, false);
+    }, 900);
+  };
+
+  // show typing indicator if selectedUser is typing
+  const otherTyping = typingUsers[selectedUser?._id];
+
+  // group messages by day (simple grouping)
+  const grouped = messages.reduce((acc, msg) => {
+    const date = new Date(msg.createdAt).toDateString();
+    acc[date] = acc[date] || [];
+    acc[date].push(msg);
+    return acc;
+  }, {});
+
+  return selectedUser ? (
+    <div className="h-full overflow-hidden relative backdrop-blur-lg flex flex-col" aria-live="polite">
+      <div className="flex items-center gap-3 py-3 mx-4 border-b border-stone-500">
         <img
-          onClick={() => setSelectedUser(null)}
-          src={assets.arrow_icon}
-          alt="Back"
-          className='md:hidden w-7 cursor-pointer'
+          src={selectedUser.profilePic || assets.avatar_icon}
+          alt={`${selectedUser.name || selectedUser.fullName} avatar`}
+          className="w-8 h-8 rounded-full object-cover"
         />
-        <img src={assets.help_icon} alt="Help" className='max-md:hidden w-5' />
+        <p className="flex-1 text-lg text-white flex items-center gap-2">
+          {selectedUser.name || selectedUser.fullName}
+          {onlineUsers?.includes(selectedUser._id) && (
+            <span className="ml-2 w-2 h-2 rounded-full bg-green-500" title="Online" />
+          )}
+        </p>
+
+        <div className="text-xs text-gray-300 px-2">
+          {connectionStatus === "connected" ? "Connected" : connectionStatus}
+        </div>
       </div>
 
-      {/* Chat Messages (This is the key fix) */}
-      <div className='flex-1 overflow-y-auto p-4'>
-        {messages.map((msg) => (
-          <div
-            key={msg._id}
-            className={`flex items-end gap-2 mb-4 ${msg.senderId === AuthUser._id ? 'justify-end' : 'justify-start'}`}
-          >
-            {msg.senderId !== AuthUser._id && (
-              <img
-                src={selectedUser.profilePic || assets.avatar_icon}
-                alt=""
-                className='w-7 h-7 rounded-full object-cover self-start'
-              />
-            )}
-            <div className={`flex flex-col ${msg.senderId === AuthUser._id ? 'items-end' : 'items-start'}`}>
-              <p
-                className={`p-2 max-w-xs md:max-w-md text-sm font-light rounded-lg break-words text-white ${
-                  msg.senderId === AuthUser._id
-                    ? 'bg-violet-500/50 rounded-br-none'
-                    : 'bg-gray-700/50 rounded-bl-none'
-                }`}
-              >
-                {msg.message}
-              </p>
-              <p className='text-gray-500 text-xs mt-1'>{formatDate(msg.createdAt)}</p>
-            </div>
-            {msg.senderId === AuthUser._id && (
-              <img
-                src={AuthUser.profilePic || assets.avatar_icon}
-                alt=""
-                className='w-7 h-7 rounded-full object-cover self-start'
-              />
-            )}
+      <div className="flex-1 overflow-y-auto p-3 pb-6" role="log">
+        {Object.keys(grouped).length === 0 && <p className="text-center text-gray-400">No messages yet</p>}
+
+        {Object.entries(grouped).map(([date, msgs]) => (
+          <div key={date} className="mb-4">
+            <div className="text-center text-xs text-gray-400 mb-2">{date}</div>
+            {msgs.map((msg, idx) => {
+              const isMine = msg.senderId === authUser?._id;
+              return (
+                <div
+                  key={msg._id || idx}
+                  className={`flex items-end gap-2 ${isMine ? "justify-end" : "justify-start"}`}
+                >
+                  {!isMine && (
+                    <img
+                      src={selectedUser.profilePic || assets.avatar_icon}
+                      alt="sender"
+                      className="w-7 h-7 rounded-full object-cover"
+                    />
+                  )}
+
+                  <div>
+                    {msg.image ? (
+                      <img
+                        src={msg.image}
+                        alt="sent"
+                        className="max-w-[230px] border border-gray-700 rounded-lg"
+                      />
+                    ) : (
+                      <p
+                        className={`p-2 max-w-[70%] md:text-sm font-light rounded-lg break-all ${
+                          isMine ? "bg-violet-500/30 text-white" : "bg-gray-700/30 text-white"
+                        }`}
+                      >
+                        {msg.text}
+                      </p>
+                    )}
+                    <div className="text-right text-xs text-gray-400 mt-1">
+                      {formatDate(msg.createdAt)} {isMine && msg.status === "pending" && "• Sending"}
+                      {isMine && msg.status === "failed" && "• Failed"}
+                    </div>
+                  </div>
+
+                  {isMine && (
+                    <img
+                      src={authUser?.profilePic || assets.avatar_icon}
+                      alt="you"
+                      className="w-7 h-7 rounded-full object-cover"
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         ))}
-        <div ref={scrollEnd}></div>
+
+        {otherTyping && <div className="text-sm italic text-gray-300">{selectedUser?.name || "User"} is typing…</div>}
+
+        <div ref={scrollEnd} />
       </div>
 
-      {/* Bottom Input Area */}
-      <form onSubmit={handleSendMessage} className='p-3 flex items-center gap-3 border-t border-stone-500'>
-        <div className='flex flex-1 items-center bg-gray-100/12 px-3 rounded-full'>
+      <form onSubmit={handleSendMessage} className="p-3 flex items-center gap-3">
+        <div className="flex flex-1 items-center bg-gray-100/12 px-3 rounded-full">
           <input
+            aria-label="Type a message"
+            onChange={(e) => handleTyping(e.target.value)}
+            value={input}
             type="text"
-            placeholder='Type a message...'
-            value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
-            className='flex-1 text-sm p-3 bg-transparent border-none rounded-lg outline-none text-white placeholder-gray-400'
+            placeholder="Type a message ..."
+            className="flex-1 text-sm p-3 bg-transparent rounded-lg outline-none text-white placeholder-gray-400"
           />
-          <input type="file" id="Image" accept='image/jpeg,image/png' hidden />
+          <input onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) { e.target.value = ""; return; }
+            if (!file.type.startsWith("image/")) { toast.error("Choose an image"); e.target.value = ""; return; }
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+              await sendMessage({ image: reader.result });
+            };
+            reader.readAsDataURL(file);
+            e.target.value = "";
+          }} type="file" id="Image" accept="image/*" hidden />
           <label htmlFor="Image">
-            <img src={assets.gallery_icon} className='w-5 mr-2 cursor-pointer' alt="Upload" />
+            <img src={assets.gallery_icon} className="w-5 mr-2 cursor-pointer" alt="Upload" />
           </label>
         </div>
-        <button type="submit">
-          <img src={assets.send_button} className='w-7 cursor-pointer' alt="Send" />
+        <button type="submit" aria-label="Send message">
+          <img src={assets.send_button} className="w-7 cursor-pointer" alt="Send" />
         </button>
       </form>
+    </div>
+  ) : (
+    <div className="flex flex-col items-center justify-center gap-2 text-gray-500 bg-white/10 max-md:hidden">
+      <img src={assets.logo_icon} className="max-w-16" alt="Logo" />
+      <p className="text-lg font-medium text-white">Chat anytime, anywhere</p>
     </div>
   );
 }

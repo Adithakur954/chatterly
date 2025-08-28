@@ -1,81 +1,94 @@
 import Message from "../model/Message.js";
 import User from "../model/User.js";
-import { asyncHandler } from "../utils/asyncHandler.js";
-import Cloudinary from "../utils/cloudinary.js";
-import { io, userSocketMap } from "../server.js";
+import cloudinary from "../utils/cloudinary.js";
 
+// ✅ Get all users for sidebar (exclude logged-in user)
+export const getUserForSideBar = async (req, res) => {
+  try {
+    const loggedInUserId = req.user._id;
+    const users = await User.find({ _id: { $ne: loggedInUserId } }).select(
+      "-password"
+    );
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
 
-export const getUserForSideBar = asyncHandler(async(req,res) =>{
-
-    const filteredUser = await User.find({_id:{$ne: req.user._id}}).select("-password");
-
-    const unseenMessages = {};
-    const promises = filteredUser.map(async(value) =>{
-
-        const message = await Message.find({senderId: value._id, receiverId: req.user._id, seen: false});
-        if(message.length > 0) {
-            unseenMessages[value._id] = message;
-        }
-    })
-
-    await Promise.all(promises);
-    res.json({success: true, data:filteredUser, unseenMessages})
-})
-
-// get all message for selected user
-
-export const getMessage = asyncHandler(async(req,res) =>{
-
-    const {id:selectedUserId} = req.params;
-    const myId = req.user._id;
-
-    const messages = await Message.find({
-        $or: [
-            { senderId: myId, receiverId: selectedUserId },
-            { senderId: selectedUserId, receiverId: myId }
-        ]
-    })
-
-    await Message.updateMany({senderId: selectedUserId, receiverId: myId}, {seen: true})
-
-    res.json({ success: true, data: messages });
-})
-
-// api to mark messages as seen using message id 
-export const markMessagesAsSeen = asyncHandler(async (req, res) => {
-   
-    const myId = req.user._id;
-
-    await Message.findByIdAndUpdate(myId, { seen: true });
-     res.json({ success: true });
-});
-// send to message 
-
-export const sendMessage = asyncHandler(async(req,res) =>{
-
-    const {text, image} = req.body;
-    const senderId = req.user._id;
+// ✅ Get all messages between logged-in user & another user
+export const getMessage = async (req, res) => {
+  try {
+    const loggedInUserId = req.user._id;
     const receiverId = req.params.id;
 
-    let imageUrl;
-    if(image){
-        const uploadResponse = await Cloudinary.uploader.upload(image);
-        imageUrl = uploadResponse.secure_url; 
+    const messages = await Message.find({
+      $or: [
+        { senderId: loggedInUserId, receiverId },
+        { senderId: receiverId, receiverId: loggedInUserId },
+      ],
+    }).sort({ createdAt: 1 });
+
+    res.status(200).json(messages);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// ✅ Send a message
+export const sendMessage = async (req, res) => {
+  try {
+    const senderId = req.user._id;
+    const receiverId = req.params.id;
+    const { text, image } = req.body;
+
+    let imageUrl = "";
+    if (image) {
+      const uploadRes = await cloudinary.uploader.upload(image, {
+        folder: "chat_images",
+      });
+      imageUrl = uploadRes.secure_url;
     }
 
-    const newMessage = await Message.create({
-        text,
-        image: imageUrl,
-        senderId,
-        receiverId
-    })
+    const newMessage = new Message({
+      senderId,
+      receiverId,
+      text,
+      image: imageUrl,
+    });
 
-    // Emit the new message to the receiver's socket
-    const receiverSocketId = userSocketMap[receiverId];
-    if (receiverSocketId) {
-        io.to(receiverSocketId).emit("getMessage", newMessage);
+    await newMessage.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Message sent successfully",
+      newMessage,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// ✅ Mark a message as seen
+export const markMessagesAsSeen = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+
+    const updatedMessage = await Message.findByIdAndUpdate(
+      messageId,
+      { seen: true },
+      { new: true }
+    );
+
+    if (!updatedMessage) {
+      return res.status(404).json({ success: false, message: "Message not found" });
     }
 
-    res.json({ success: true,newMessage });
-
-})
+    res.status(200).json({
+      success: true,
+      message: "Message marked as seen",
+      updatedMessage,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
