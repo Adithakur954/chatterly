@@ -1,29 +1,18 @@
-import { useContext } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import Home from './pages/Home';
-import Login from './pages/Login';
-import Profile from './pages/Profile';
-import { Toaster } from 'react-hot-toast';
-import { AuthContext } from '../Context/AuthContext';
+import { Navigate, Route, Routes } from "react-router-dom";
+import Home from "./pages/Home.jsx";
+import Login from "./pages/Login.jsx";
+import { useAuthContext } from "../Context/AuthContext.jsx";
+import { Toaster } from "react-hot-toast";
 
 function App() {
-  const { AuthUser, loading } = useContext(AuthContext);
-
-  if (loading) {
-    return <div className="text-white text-center mt-10">Loading...</div>; // Or show spinner
-  }
-
+  const { authUser } = useAuthContext();
   return (
-    <div
-      className="min-h-screen bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: "url(./src/assets/bgImage.svg)" }}
-    >
-      <Toaster />
+    <div className="p-4 h-screen flex items-center justify-center">
       <Routes>
-        <Route path="/" element={AuthUser ? <Home /> : <Navigate to="/login" />} />
-        <Route path="/login" element={!AuthUser ? <Login /> : <Navigate to="/" />} />
-        <Route path="/profile" element={AuthUser ? <Profile /> : <Navigate to="/login" />} />
+        <Route path="/" element={authUser ? <Home /> : <Navigate to={"/login"} />} />
+        <Route path="/login" element={authUser ? <Navigate to="/" /> : <Login />} />
       </Routes>
+      <Toaster />
     </div>
   );
 }

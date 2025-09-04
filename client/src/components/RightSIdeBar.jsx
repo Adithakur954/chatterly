@@ -1,40 +1,25 @@
-// src/components/RightSideBar.jsx
-import React, { useContext } from "react";
-import assets, { imagesDummyData } from "../assets/assets";
-import { AuthContext } from "../../Context/AuthContext";
+import React from 'react';
+import useConversation from '../zustand/useConversation';
 
-const RightSideBar = ({ selectedUser }) => {
-  const { logout } = useContext(AuthContext);
+const RightSideBar = () => {
+  const { selectedConversation } = useConversation();
 
-  if (!selectedUser) {
-    return <aside className="bg-[#8185B2]/10 text-white w-full relative overflow-y-scroll max-md:hidden" />;
+  if (!selectedConversation) {
+    return <div className="hidden md:block md:w-1/4 bg-gray-100 p-4"></div>;
   }
 
   return (
-    <aside className="bg-[#8185B2]/10 text-white w-full relative overflow-y-scroll max-md:hidden">
-      <div className="pt-16 flex flex-col items-center gap-2 text-xs font-light mx-auto">
-        <img src={selectedUser.profilePic || assets.avatar_icon} alt="avatar" className="w-20 h-20 rounded-full object-cover" />
-        <h1 className="px-10 text-xl font-medium mx-auto">{selectedUser.name || selectedUser.fullName}</h1>
-        <p className="px-10 text-center text-sm">{selectedUser.bio}</p>
+    <div className="hidden md:block md:w-1/4 bg-gray-100 p-4 border-l border-slate-500">
+      <div className="flex flex-col items-center text-center">
+        <img
+          src={selectedConversation.profilePic || `https://avatar.iran.liara.run/public/boy?username=${selectedConversation.fullName}`}
+          alt={`${selectedConversation.fullName}'s profile`}
+          className="w-24 h-24 rounded-full mb-4 ring-2 ring-blue-500"
+        />
+        <h3 className="text-lg font-bold text-gray-800">{selectedConversation.fullName}</h3>
+        <p className="text-sm text-gray-600">{selectedConversation.email}</p>
       </div>
-
-      <hr className="border-[#ffffff50] my-4" />
-
-      <div className="px-5 text-xs">
-        <p>Media</p>
-        <div className="mt-2 max-h-[200px] overflow-y-scroll grid grid-cols-2 gap-4 opacity-80">
-          {imagesDummyData.map((url, idx) => (
-            <button key={idx} onClick={() => window.open(url, "_blank")} className="cursor-pointer rounded overflow-hidden">
-              <img src={url} alt={`media-${idx}`} className="h-full w-full object-cover rounded-md" />
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <button onClick={logout} className="absolute bottom-5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-purple-400 to-violet-600 text-white text-sm font-light py-2 px-20 rounded-full">
-        Logout
-      </button>
-    </aside>
+    </div>
   );
 };
 

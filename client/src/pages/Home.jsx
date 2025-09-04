@@ -1,22 +1,14 @@
-// src/pages/Home.jsx
-import React, { useContext } from "react";
-import SideBar from "../components/SideBar";
-import ChatContainer from "../components/ChatContainer";
-import RightSideBar from "../components/RightSideBar";
-import { ChatContext } from "../../Context/ChatContext";
+import ChatContainer from "../components/ChatContainer.jsx";
+import SideBar from "../components/SideBar.jsx";
+import RightSideBar from "../components/RightSideBar.jsx";
 
 const Home = () => {
-  const { selectedUser } = useContext(ChatContext);
-
   return (
-    <div className="h-screen sm:px-[5%] sm:py-[3%] bg-[#0b0a16] text-white">
-      <div className={`backdrop-blur-xl border-2 border-gray-700 rounded-2xl h-full grid ${selectedUser ? "grid-cols-1 md:grid-cols-[1fr_1.6fr_1fr]" : "grid-cols-1 md:grid-cols-2"}`}>
-        <SideBar />
-        <ChatContainer />
-        <RightSideBar selectedUser={selectedUser} />
-      </div>
+    <div className="flex h-[85vh] w-full md:w-[80vw] lg:w-[70vw] rounded-lg overflow-hidden bg-gray-400 bg-clip-padding backdrop-filter backdrop-blur-lg bg-opacity-0">
+      <SideBar />
+      <ChatContainer />
+      <RightSideBar />
     </div>
   );
 };
-
 export default Home;

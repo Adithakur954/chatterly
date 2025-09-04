@@ -1,117 +1,122 @@
-import { asyncHandler } from "../utils/asyncHandler.js";
-import User from "../model/User.js";
-import { hashPassword } from "../utils/hashpassword.js";
-import generateToken from "../utils/generateToken.js";
-import cloudinary from "../utils/cloudinary.js";
-import bcrypt from "bcryptjs";
+import User from '../model/User.js';
+import Message from '../model/Message.js';
+import asyncHandler from '../utils/asyncHandler.js';
+import { generateTokenAndSetCookie } from '../utils/generateToken.js';
+import bcrypt from 'bcryptjs';
+import { uploadOnCloudinary } from '../utils/cloudinary.js';
 
-// Signup Controller
 export const signup = asyncHandler(async (req, res) => {
-  const { email, name, password, profilePic, bio } = req.body;
+    const { fullName, email, password, confirmPassword } = req.body;
 
-  if (!email || !name || !password || !bio) {
-    return res.status(400).json({ message: "All fields are required" });
-  }
-
-  const existingUser = await User.findOne({ email });
-  if (existingUser) {
-    return res.status(400).json({ message: "User already exists" });
-  }
-
-  const hashedPass = await hashPassword(password);
-
-  const newUser = await User.create({
-    email,
-    name,
-    password: hashedPass,
-    bio,
-    profilePic: profilePic || null,
-  });
-
-  const token = generateToken(newUser._id);
-
-  const userResponse = newUser.toObject();
-  delete userResponse.password;
-
-  res.status(201).json({
-    message: "User created successfully",
-    user: userResponse,
-    token,
-  });
-});
-
-// Login Controller
-export const login = asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ message: "All fields are required" });
-  }
-
-  const user = await User.findOne({ email });
-  if (!user) {
-    return res.status(400).json({ message: "Invalid credentials" });
-  }
-
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) {
-    return res.status(400).json({ message: "Invalid credentials" });
-  }
-
-  const token = generateToken(user._id);
-
-  const userResponse = user.toObject();
-  delete userResponse.password;
-
-  res.status(200).json({
-    message: "Login successful",
-    user: userResponse,
-    token,
-  });
-});
-
-// Check Auth
-export const checkauth = asyncHandler(async (req, res) => {
-  if (!req.user) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  res.status(200).json({
-    message: "User is authenticated",
-    user: req.user,
-  });
-});
-
-// Update Profile
-export const updateProfile = asyncHandler(async (req, res) => {
-  const { name, bio, profilePic } = req.body;
-  const userId = req.user._id;
-
-  try {
-    let updatedUser;
-    if (profilePic) {
-      const upload = await cloudinary.uploader.upload(profilePic, {
-        folder: "profile_pics",
-      });
-      updatedUser = await User.findByIdAndUpdate(
-        userId,
-        { name, bio, profilePic: upload.secure_url },
-        { new: true }
-      ).select("-password");
-    } else {
-      updatedUser = await User.findByIdAndUpdate(
-        userId,
-        { name, bio },
-        { new: true }
-      ).select("-password");
+    if (password !== confirmPassword) {
+        return res.status(400).json({ error: "Passwords don't match" });
     }
 
-    res.status(200).json({
-      message: "Profile updated successfully",
-      user: updatedUser,
+    const user = await User.findOne({ email });
+    if (user) {
+        return res.status(400).json({ error: 'User already exists' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const newUser = new User({
+        fullName,
+        email,
+        password: hashedPassword,
     });
-  } catch (error) {
-    console.error("Profile update error:", error);
-    res.status(500).json({ message: "Failed to update profile" });
-  }
+
+    if (newUser) {
+        generateTokenAndSetCookie(newUser._id, res);
+        await newUser.save();
+        res.status(201).json({
+            _id: newUser._id,
+            fullName: newUser.fullName,
+            email: newUser.email,
+            profilePic: newUser.profilePic,
+        });
+    } else {
+        res.status(400).json({ error: 'Invalid user data' });
+    }
+});
+
+export const login = asyncHandler(async (req, res) => {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+    const isPasswordCorrect = await bcrypt.compare(password, user?.password || "");
+
+    if (!user || !isPasswordCorrect) {
+        return res.status(400).json({ error: 'Invalid username or password' });
+    }
+
+    generateTokenAndSetCookie(user._id, res);
+
+    res.status(200).json({
+        _id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        profilePic: user.profilePic,
+    });
+});
+
+export const logout = (req, res) => {
+    try {
+        res.cookie('jwt', '', { maxAge: 0 });
+        res.status(200).json({ message: 'Logged out successfully' });
+    } catch (error) {
+        console.log('Error in logout controller', error.message);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
+export const getUserForSideBar = asyncHandler(async (req, res) => {
+    const loggedInUserId = req.user._id;
+
+    const conversations = await Message.aggregate([
+        {
+            $match: {
+                $or: [{ senderId: loggedInUserId }, { receiverId: loggedInUserId }]
+            }
+        },
+        {
+            $sort: { createdAt: -1 }
+        },
+        {
+            $group: {
+                _id: {
+                    $cond: {
+                        if: { $eq: ['$senderId', loggedInUserId] },
+                        then: '$receiverId',
+                        else: '$senderId'
+                    }
+                },
+                lastMessage: { $first: '$$ROOT' }
+            }
+        },
+        {
+            $lookup: {
+                from: 'users',
+                localField: '_id',
+                foreignField: '_id',
+                as: 'userDetails'
+            }
+        },
+        {
+            $unwind: '$userDetails'
+        },
+        {
+            $project: {
+                _id: '$userDetails._id',
+                fullName: '$userDetails.fullName',
+                profilePic: '$userDetails.profilePic',
+                lastMessage: {
+                    message: '$lastMessage.message',
+                    senderId: '$lastMessage.senderId',
+                    createdAt: '$lastMessage.createdAt'
+                }
+            }
+        }
+    ]);
+
+    res.status(200).json(conversations);
 });

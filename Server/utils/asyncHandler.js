@@ -1,11 +1,5 @@
-// utils/asyncHandler.js
-
-const asyncHandler = (requestHandler) => (req, res, next) => {
-  try {
-    requestHandler(req, res, next);
-  } catch (error) {
-    next(error);
-  }
+const asyncHandler = (fn) => (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-export { asyncHandler };
+export default asyncHandler;

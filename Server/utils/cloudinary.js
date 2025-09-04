@@ -6,4 +6,16 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-export default cloudinary;
+const uploadOnCloudinary = (filePath) => {
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader.upload(filePath, (error, result) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(result);
+      }
+    });
+  });
+};
+
+export default uploadOnCloudinary;

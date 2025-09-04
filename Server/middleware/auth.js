@@ -1,40 +1,30 @@
-import { asyncHandler } from "../utils/asyncHandler.js";
-import jwt from "jsonwebtoken";
-import User from "../model/User.js";
+import jwt from 'jsonwebtoken';
+import User from '../model/User.js';
 
-export const protectRoute = asyncHandler(async (req, res, next) => {
-  let token = null;
+export const protectRoute = async (req, res, next) => {
+    try {
+        const token = req.cookies.jwt;
 
-  if (req.headers.token) {
-    token = req.headers.token;
-  }
-  else if (req.headers.authorization && req.headers.authorization.startsWith("Bearer ")) {
-    token = req.headers.authorization.split(" ")[1];
-  }
+        if (!token) {
+            return res.status(401).json({ error: 'Unauthorized - No Token Provided' });
+        }
 
-  if (!token) {
-    return res.status(401).json({ message: "Not authorized, no token" });
-  }
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        if (!decoded) {
+            return res.status(401).json({ error: 'Unauthorized - Invalid Token' });
+        }
 
-    const userId = decoded.id || decoded.userid;
+        const user = await User.findById(decoded.userId).select('-password');
 
-    if (!userId) {
-      return res.status(401).json({ message: "Invalid token payload" });
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        req.user = user;
+        next();
+    } catch (error) {
+        console.log('Error in protectRoute middleware:', error.message);
+        res.status(500).json({ error: 'Internal server error' });
     }
-
-    const user = await User.findById(userId).select("-password");
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    req.user = user;
-    next();
-  } catch (error) {
-    console.error("Token verification failed:", error.message);
-    return res.status(401).json({ message: "Not authorized, token failed" });
-  }
-});
+};

@@ -1,13 +1,12 @@
-import express from "express";
-import { signup, login, checkauth, updateProfile } from "../controllers/User.controller.js";
-import { protectRoute } from "../middleware/auth.js";
+import express from 'express';
+import { signup, login, logout, getUserForSideBar } from '../controllers/User.controller.js';
+import { protectRoute } from '../middleware/auth.js';
 
-const userRouter = express.Router();
+const router = express.Router();
 
-// these match frontend calls in AuthContext.jsx
-userRouter.post("/signup", signup);
-userRouter.post("/login", login);
-userRouter.get("/check", protectRoute, checkauth);
-userRouter.put("/profile", protectRoute, updateProfile);
+router.post('/signup', signup);
+router.post('/login', login);
+router.post('/logout', logout);
+router.get('/sidebar', protectRoute, getUserForSideBar);
 
-export default userRouter;
+export default router;
